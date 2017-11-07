@@ -1,0 +1,9 @@
+[submodule "plugins/Weather"]
+	path = plugins/Weather
+	url = https://gitee.com/mapledxf/DomoticzWeatherPlugin.git
+[submodule "plugins/XiaomiAirPurifier"]
+	path = plugins/XiaomiAirPurifier
+	url = https://gitee.com/mapledxf/DomoticzXiaomiAirPurifierPlugin.git
+[submodule "www/dash"]
+	path = www/dash
+	url = https://github.com/mapledxf/dashticz_v2.git

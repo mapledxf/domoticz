@@ -257,6 +257,7 @@ const char *Hardware_Type_Desc(int hType)
 		{ HTYPE_USBtinGateway, "USBtin Can Gateway"},
 		{ HTYPE_EnphaseAPI, "Enphase Envoy with LAN (HTTP) interface" },
 		{ HTYPE_RaspberryMCP23017, "I2C sensor GPIO 16bit expander MCP23017" },
+		{ HTYPE_eHouseTCP, "eHouse UDP+TCP with LAN interface" },
 		{ 0, NULL, NULL }
 	};
 	return findTableIDSingle1 (Table, hType);
@@ -300,6 +301,7 @@ const char *Meter_Type_Desc(const _eMeterType sType)
 		{ MTYPE_WATER, "Water" },
 		{ MTYPE_COUNTER, "Counter" },
 		{ MTYPE_ENERGY_GENERATED, "Energy Generated" },
+		{ MTYPE_TIME , "Time" },
 		{  0,NULL,NULL }
 	};
 	return findTableIDSingle1 (Table, sType);
@@ -350,7 +352,7 @@ const char *Notification_Type_Label(const int nType)
 	static const STR_TABLE_SINGLE	Table[] =
 	{
 		{ NTYPE_TEMPERATURE, "degrees" },
-		{ NTYPE_HUMIDITY, "%%" },
+		{ NTYPE_HUMIDITY, "%" },
 		{ NTYPE_RAIN, "mm" },
 		{ NTYPE_UV, "UVI" },
 		{ NTYPE_WIND, "m/s" },
@@ -365,7 +367,7 @@ const char *Notification_Type_Label(const int nType)
 		{ NTYPE_TODAYGAS, "m3" },
 		{ NTYPE_TODAYCOUNTER, "cnt" },
 		{ NTYPE_SWITCH_OFF, "On" },
-		{ NTYPE_PERCENTAGE, "%%" },
+		{ NTYPE_PERCENTAGE, "%" },
 		{ NTYPE_RPM, "RPM" },
 		{ NTYPE_DEWPOINT, "degrees" },
 		{ NTYPE_SETPOINT, "degrees" },
@@ -1962,7 +1964,7 @@ void GetSelectorSwitchStatuses(const std::map<std::string, std::string> & option
 		std::vector<std::string>::iterator itt;
 		int i = 0;
 		std::stringstream ss;
-		for (itt = strarray.begin(); (itt != strarray.end()) && (i <= 100); ++itt) {
+		for (itt = strarray.begin(); (itt != strarray.end()); ++itt) {
 			ss.clear(); ss.str(""); ss << i;
 			std::string level(ss.str());
 			std::string levelName = *itt;
@@ -1986,7 +1988,7 @@ int GetSelectorSwitchLevel(const std::map<std::string, std::string> & options, c
 		boost::split(strarray, sOptions, boost::is_any_of("|"), boost::token_compress_off);
 		std::vector<std::string>::iterator itt;
 		int i = 0;
-		for (itt = strarray.begin(); (itt != strarray.end()) && (i <= 100); ++itt) {
+		for (itt = strarray.begin(); (itt != strarray.end()); ++itt) {
 			if (*itt == levelName) {
 				level = i;
 				break;
@@ -2010,7 +2012,7 @@ std::string GetSelectorSwitchLevelAction(const std::map<std::string, std::string
 		boost::split(strarray, sOptions, boost::is_any_of("|"), boost::token_compress_off);
 		std::vector<std::string>::iterator itt;
 		int i = 0;
-		for (itt = strarray.begin(); (itt != strarray.end()) && (i <= 100); ++itt) {
+		for (itt = strarray.begin(); (itt != strarray.end()); ++itt) {
 			if (i == level) {
 				action = *itt;
 				break;

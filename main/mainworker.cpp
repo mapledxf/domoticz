@@ -131,7 +131,7 @@
 #include "../hardware/USBtin.h"
 #include "../hardware/USBtin_MultiblocV8.h"
 #include "../hardware/EnphaseAPI.h"
-
+#include "../hardware/eHouseTCP.h"
 // load notifications configuration
 #include "../notifications/NotificationHelper.h"
 
@@ -760,6 +760,10 @@ bool MainWorker::AddHardwareFromParams(
 	case HTYPE_MQTT:
 		//LAN
 		pHardware = new MQTT(ID, Address, Port, Username, Password, Filename, Mode1);
+		break;
+	case HTYPE_eHouseTCP:	
+		//eHouse LAN, WiFi,Pro and other via eHousePRO gateway
+		pHardware = new eHouseTCP(ID, Address, Port, Password, Mode1, Mode2, Mode3, Mode4, Mode5, Mode6);
 		break;
 	case HTYPE_FRITZBOX:
 		//LAN
@@ -10806,27 +10810,27 @@ bool MainWorker::SwitchLightInt(const std::vector<std::string> &sd, std::string 
 
 	//when asking for Toggle, just switch to the opposite value
 	if (switchcmd == "Toggle") {
-		switchcmd = (atoi(sd[7].c_str()) == 1 ? "Off" : "On");
+		//Request current state of switch
+		std::string lstatus = "";
+		int llevel = 0;
+		bool bHaveDimmer = false;
+		bool bHaveGroupCmd = false;
+		int maxDimLevel = 0;
+
+		int nValue = atoi(sd[7].c_str());
+		std::string sValue = sd[8];
+
+		GetLightStatus(dType, dSubType, switchtype, nValue, sValue, lstatus, llevel, bHaveDimmer, maxDimLevel, bHaveGroupCmd);
+		//Flip the status
+		switchcmd = (IsLightSwitchOn(lstatus) == true) ? "Off" : "On";
 	}
 
-	//adjust level
-	if (switchcmd=="Set Level" ||
-		switchcmd=="On")
-	{
-		if (
-			(level > 0) &&
-			(switchtype != STYPE_Selector)
-			)
-		{
-			level -= 1;
-		}
-		//when level = 0 and command is "Set Level", set switch command to Off
-		if (level==0 && switchcmd=="Set Level")
-			switchcmd="Off";
-	}
+	// If dimlevel is 0 or no dimlevel, turn switch off
+	if (level <= 0 && switchcmd == "Set Level")
+		switchcmd="Off";
 
-	//when level = 0 and command is "On" replace level with "LastLevel"
-	if (switchcmd=="On" && level == 0 && switchtype != STYPE_Selector)
+	//when level is invalid or command is "On", replace level with "LastLevel"
+	if (switchcmd=="On" || level < 0)
 	{
 		//Get LastLevel
 		std::vector<std::vector<std::string> > result;
@@ -10837,6 +10841,8 @@ bool MainWorker::SwitchLightInt(const std::vector<std::string> &sd, std::string 
 			level = atoi(result[0][0].c_str());
 		}
 	}
+	// TODO: Something smarter if level is not valid?
+	level = max(level,0);
 
 	//
 	//	For plugins all the specific logic below is irrelevent
@@ -11759,8 +11765,11 @@ bool MainWorker::SwitchLight(const std::string &idx, const std::string &switchcm
 	uint64_t ID;
 	std::stringstream s_str(idx);
 	s_str >> ID;
+	int ilevel = -1;
+	if (level != "")
+		ilevel = atoi(level.c_str());
 
-	return SwitchLight(ID, switchcmd, atoi(level.c_str()), atoi(hue.c_str()), atoi(ooc.c_str()) != 0, ExtraDelay);
+	return SwitchLight(ID, switchcmd, ilevel, atoi(hue.c_str()), atoi(ooc.c_str()) != 0, ExtraDelay);
 }
 
 bool MainWorker::SwitchLight(const uint64_t idx, const std::string &switchcmd, const int level, const int hue, const bool ooc, const int ExtraDelay)
@@ -11810,12 +11819,12 @@ bool MainWorker::SwitchLight(const uint64_t idx, const std::string &switchcmd, c
 		return SwitchLightInt(sd, switchcmd, level, hue, false);
 }
 
-bool MainWorker::SetSetPoint(const std::string &idx, const float TempValue, const int newMode, const std::string &until)
+bool MainWorker::SetSetPoint(const std::string &idx, const float TempValue, const std::string &newMode, const std::string &until)
 {
 	//Get Device details
 	std::vector<std::vector<std::string> > result;
 	result = m_sql.safe_query(
-		"SELECT HardwareID, DeviceID,Unit,Type,SubType,SwitchType,StrParam1 FROM DeviceStatus WHERE (ID == '%q')",
+		"SELECT HardwareID, DeviceID,Unit,Type,SubType,SwitchType,StrParam1,ID FROM DeviceStatus WHERE (ID == '%q')",
 		idx.c_str());
 	if (result.size() < 1)
 		return false;
@@ -11829,6 +11838,17 @@ bool MainWorker::SetSetPoint(const std::string &idx, const float TempValue, cons
 	CDomoticzHardwareBase *pHardware = GetHardware(HardwareID);
 	if (pHardware == NULL)
 		return false;
+
+	if (pHardware->HwdType != HTYPE_EVOHOME_SCRIPT && pHardware->HwdType != HTYPE_EVOHOME_SERIAL && pHardware->HwdType != HTYPE_EVOHOME_WEB && pHardware->HwdType != HTYPE_EVOHOME_TCP)
+		return SetSetPointInt(sd, TempValue);
+
+	int nEvoMode = 0;
+	if (newMode == "PermanentOverride" || newMode.empty())
+		nEvoMode = CEvohomeBase::zmPerm;
+	else if (newMode == "TemporaryOverride")
+		nEvoMode = CEvohomeBase::zmTmp;
+
+	//_log.Log(LOG_TRACE, "Set point %s %f '%s' '%s'", idx.c_str(), TempValue, newMode.c_str(), until.c_str());
 
 	unsigned long ID;
 	std::stringstream s_strid;
@@ -11856,8 +11876,8 @@ bool MainWorker::SetSetPoint(const std::string &idx, const float TempValue, cons
 			tsen.EVOHOME2.zone = Unit;//controller is 0 so let our zones start from 1...
 		tsen.EVOHOME2.updatetype = CEvohomeBase::updSetPoint;//setpoint
 		tsen.EVOHOME2.temperature = static_cast<int16_t>((dType == pTypeEvohomeWater) ? TempValue : TempValue*100.0f);
-		tsen.EVOHOME2.mode = newMode;
-		if (newMode == CEvohomeBase::zmTmp)
+		tsen.EVOHOME2.mode = nEvoMode;
+		if (nEvoMode == CEvohomeBase::zmTmp)
 			CEvohomeDateTime::DecodeISODate(tsen.EVOHOME2, until.c_str());
 		WriteToHardware(HardwareID, (const char*)&tsen, sizeof(tsen.EVOHOME2));
 
@@ -11981,7 +12001,7 @@ bool MainWorker::SetSetPointInt(const std::vector<std::string> &sd, const float 
 		}
 		else if (pHardware->HwdType == HTYPE_EVOHOME_SCRIPT || pHardware->HwdType == HTYPE_EVOHOME_SERIAL || pHardware->HwdType == HTYPE_EVOHOME_WEB || pHardware->HwdType == HTYPE_EVOHOME_TCP)
 		{
-			SetSetPoint(sd[7], TempValue, CEvohomeBase::zmPerm, "");
+			SetSetPoint(sd[7], TempValue, "PermanentOverride", "");
 		}
 		else if (pHardware->HwdType == HTYPE_IntergasInComfortLAN2RF)
 		{
@@ -12459,7 +12479,7 @@ bool MainWorker::SwitchScene(const uint64_t idx, std::string switchcmd)
 			_log.Log(LOG_NORM, "Activating Scene/Group Device: %s (%s)", DeviceName.c_str(), lstatus.c_str());
 
 
-			int ilevel = maxDimLevel - 1;
+			int ilevel = maxDimLevel - 1; // Why -1?
 
 			if (
 				((switchtype == STYPE_Dimmer) ||
@@ -12474,7 +12494,7 @@ bool MainWorker::SwitchScene(const uint64_t idx, std::string switchcmd)
 					float fLevel = (maxDimLevel / 100.0f)*level;
 					if (fLevel > 100)
 						fLevel = 100;
-					ilevel = round(fLevel) + 1;
+					ilevel = round(fLevel);
 				}
 				if (switchtype == STYPE_Selector) {
 					if (lstatus != "Set Level") {
@@ -12602,8 +12622,7 @@ void MainWorker::LoadSharedUsers()
 			suser.Password = sd[2];
 
 			//Get User Devices
-			result2 = m_sql.safe_query("SELECT DeviceRowID FROM SharedDevices WHERE (SharedUserID == '%q')",
-				sd[0].c_str());
+			result2 = m_sql.safe_query("SELECT DeviceRowID FROM SharedDevices WHERE (SharedUserID == '%q')", sd[0].c_str());
 			if (result2.size() > 0)
 			{
 				for (itt2 = result2.begin(); itt2 != result2.end(); ++itt2)

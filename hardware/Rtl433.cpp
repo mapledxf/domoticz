@@ -14,15 +14,8 @@
 #include <stdio.h>
 #include "Rtl433.h"
 
-void removeCharsFromString(std::string &str, const char* charsToRemove ) {
-   for ( unsigned int i = 0; i < strlen(charsToRemove); ++i ) {
-      str.erase( remove(str.begin(), str.end(), charsToRemove[i]), str.end() );
-   }
-}
-
-CRtl433::CRtl433(const int ID, const std::string &cmdline) :
-	m_stoprequested(false),
-	m_cmdline(cmdline)
+CRtl433::CRtl433(const int ID) :
+	m_stoprequested(false)
 {
 	// Basic protection from malicious command line
 	removeCharsFromString(m_cmdline, ":;/$()`<>|&");
@@ -99,7 +92,7 @@ void CRtl433::Do_Work()
 		std::vector<std::string> headers;
 		std::string sLastLine = "";
 
-		std::string szFlags = "-F csv -q -I 2 " + m_cmdline; // -f 433.92e6 -f 868.24e6 -H 60 -d 0
+		std::string szFlags = "-F csv -q -I 2";
 #ifdef WIN32
 		std::string szCommand = "C:\\rtl_433.exe " + szFlags;
 		m_hPipe = _popen(szCommand.c_str(), "r");
@@ -224,18 +217,23 @@ void CRtl433::Do_Work()
 						hasbattery = true;
 					}
 				}
-
-				if (!data["temperature_C"].empty())
-				{
-					tempC = (float)atof(data["temperature_C"].c_str());
-					hastempC = true;
+				try {
+					if (!data["temperature_C"].empty())
+					{
+						tempC = boost::lexical_cast<float>(data["temperature_C"]);
+						hastempC = true;
+					}
 				}
-
-
-				if (!data["humidity"].empty())
-				{
-					humidity = atoi(data["humidity"].c_str());
-					hashumidity = true;
+				catch (boost::bad_lexical_cast e) {
+				}
+				try {
+					if (!data["humidity"].empty())
+					{
+						humidity = boost::lexical_cast<int>(data["humidity"]);
+						hashumidity = true;
+					}
+				}
+				catch (boost::bad_lexical_cast e) {
 				}
 
 				if (!data["pressure"].empty())

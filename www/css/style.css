@@ -283,6 +283,7 @@ strong {
 	height: 2.00em;
 	padding: 0em 1.25em 0em 1.25em;
 	background: url(images/img03b.jpg) repeat right top;
+	border: none;
 	border-radius: 5px;
 	line-height: 2.00em;
 	text-decoration: none;
@@ -298,6 +299,7 @@ strong {
 	height: 2.00em;
 	padding: 0em 1.25em 0em 1.25em;
 	background: url(images/img03bd.png) repeat right top;
+	border: none;
 	border-radius: 5px;
 	line-height: 2.00em;
 	text-decoration: none;
@@ -1863,4 +1865,10 @@ tspan {
 
 .ui-selectmenu-menu .selectorlevels-menu {
 	font-size: 0.9em;
+}
+
+#rgbw_popup .dimslider, #rgbw_popup .dimslider .white_slider{
+   width: calc(100% - 38px) !important;
+   margin-left: 6px !important;
+   margin-top: 10px !important;       
 }

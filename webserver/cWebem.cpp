@@ -635,6 +635,10 @@ bool cWebem::CheckForPageOverride(WebEmSession & session, request& req, reply& r
 			reply::add_header(&rep, "Cache-Control", "no-cache");
 			reply::add_header(&rep, "Pragma", "no-cache");
 			reply::add_header(&rep, "Access-Control-Allow-Origin", "*");
+			//browser support to prevent XSS
+			reply::add_header(&rep, "X-Content-Type-Options", "nosniff");
+			reply::add_header(&rep, "X-XSS-Protection", "1; mode=block");
+			//reply::add_header(&rep, "X-Frame-Options", "SAMEORIGIN"); //this might brake custom pages that embed third party images (like used by weather channels)
 		}
 		else
 		{
@@ -666,6 +670,10 @@ bool cWebem::CheckForPageOverride(WebEmSession & session, request& req, reply& r
 	reply::add_header(&rep, "Cache-Control", "no-cache");
 	reply::add_header(&rep, "Pragma", "no-cache");
 	reply::add_header(&rep, "Access-Control-Allow-Origin", "*");
+	//browser support to prevent XSS
+	reply::add_header(&rep, "X-Content-Type-Options", "nosniff");
+	reply::add_header(&rep, "X-XSS-Protection", "1; mode=block");
+	//reply::add_header(&rep, "X-Frame-Options", "SAMEORIGIN"); //this might brake custom pages that embed third party images (like used by weather channels)
 
 	return true;
 }
@@ -1821,17 +1829,6 @@ void cWebemRequestHandler::handle_request(const request& req, reply& rep)
 				break;
 			}
 		}
-			// check if content is not gzipped, include won't work with non-text content
-			if (!rep.bIsGZIP) {
-				// Find and include any special cWebem strings
-				if (!myWebem->Include(rep.content)) {
-					if (mInfo.mtime_support && !mInfo.is_modified) {
-						//_log.Log(LOG_STATUS, "[web:%s] %s not modified (1).", myWebem->GetPort().c_str(), req.uri.c_str());
-						rep = reply::stock_reply(reply::not_modified);
-						return;
-					}
-				}
-			}
 
 		if (content_type == "text/html"
 			|| content_type == "text/plain"
